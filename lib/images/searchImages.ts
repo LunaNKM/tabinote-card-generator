@@ -1,47 +1,88 @@
 import type { ImageSearchResult, SourcePreference } from "@/types/image";
 import { normalizeSource } from "./normalizeSource";
 
+type SerpApiImageResult = {
+  title?: string;
+  original?: string;
+  thumbnail?: string;
+  source?: string;
+  link?: string;
+  original_width?: number;
+  original_height?: number;
+  position?: number;
+};
+
 export async function searchImages(params: {
   query: string;
   sourcePreference?: SourcePreference;
   limit?: number;
 }): Promise<ImageSearchResult[]> {
-  const limit = params.limit ?? 8;
-  const key = process.env.IMAGE_SEARCH_API_KEY || process.env.GOOGLE_SEARCH_API_KEY;
-  const cx = process.env.IMAGE_SEARCH_ENGINE_ID || process.env.GOOGLE_SEARCH_ENGINE_ID;
+  const limit = Math.min(Math.max(params.limit ?? 8, 1), 20);
+  const apiKey = process.env.SERPAPI_API_KEY;
 
-  if (!key || !cx) {
+  if (!apiKey) {
     return mockImageResults(params.query, limit);
   }
 
-  const url = new URL("https://www.googleapis.com/customsearch/v1");
-  url.searchParams.set("key", key);
-  url.searchParams.set("cx", cx);
+  const url = new URL("https://serpapi.com/search.json");
+  url.searchParams.set("engine", "google_images");
   url.searchParams.set("q", buildQuery(params.query, params.sourcePreference));
-  url.searchParams.set("searchType", "image");
-  url.searchParams.set("num", String(Math.min(limit, 10)));
+  url.searchParams.set("api_key", apiKey);
+  url.searchParams.set("hl", "ja");
+  url.searchParams.set("gl", "jp");
   url.searchParams.set("safe", "active");
 
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("Image search failed");
+  const res = await fetch(url, {
+    // Vercel/Next.js 서버에서 너무 오래 캐시하지 않도록 설정
+    cache: "no-store"
+  });
+
+  if (!res.ok) {
+    const message = await res.text().catch(() => "");
+    console.error("SerpAPI image search failed", res.status, message);
+    return mockImageResults(params.query, limit);
+  }
 
   const data = await res.json();
-  return (data.items ?? []).map((item: any) => ({
-    imageUrl: item.link,
-    thumbnailUrl: item.image?.thumbnailLink,
-    sourceUrl: item.image?.contextLink,
-    sourceLabel: normalizeSource(item.image?.contextLink),
-    width: item.image?.width,
-    height: item.image?.height,
-    relevance: 0.75
-  }));
+  const items: SerpApiImageResult[] = Array.isArray(data.images_results)
+    ? data.images_results
+    : [];
+
+  const normalized = items
+    .filter((item) => Boolean(item.original || item.thumbnail))
+    .slice(0, limit)
+    .map((item, index) => {
+      const sourceUrl = item.link || item.source || "https://serpapi.com";
+      return {
+        imageUrl: item.original || item.thumbnail!,
+        thumbnailUrl: item.thumbnail || item.original,
+        sourceUrl,
+        sourceLabel: normalizeSource(sourceUrl),
+        width: item.original_width,
+        height: item.original_height,
+        relevance: Math.max(0.45, 1 - index * 0.04)
+      } satisfies ImageSearchResult;
+    });
+
+  return normalized.length ? normalized : mockImageResults(params.query, limit);
 }
 
 function buildQuery(query: string, preference?: SourcePreference) {
-  if (preference === "official") return `${query} 공식 official`;
-  if (preference === "retail") return `${query} 올리브영 롯데 다이소 쇼핑몰`;
-  if (preference === "pinterest") return `${query} site:pinterest.com`;
-  return query;
+  const trimmed = query.trim();
+
+  if (preference === "official") {
+    return `${trimmed} 공식 official brand site`;
+  }
+
+  if (preference === "retail") {
+    return `${trimmed} 올리브영 다이소 롯데 쇼핑몰 공식`;
+  }
+
+  if (preference === "pinterest") {
+    return `${trimmed} site:pinterest.com`;
+  }
+
+  return trimmed;
 }
 
 function mockImageResults(query: string, limit: number): ImageSearchResult[] {
