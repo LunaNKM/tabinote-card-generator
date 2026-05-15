@@ -7,8 +7,8 @@ export async function searchImages(params: {
   limit?: number;
 }): Promise<ImageSearchResult[]> {
   const limit = params.limit ?? 8;
-  const key = process.env.GOOGLE_SEARCH_API_KEY;
-  const cx = process.env.GOOGLE_SEARCH_ENGINE_ID;
+  const key = process.env.IMAGE_SEARCH_API_KEY || process.env.GOOGLE_SEARCH_API_KEY;
+  const cx = process.env.IMAGE_SEARCH_ENGINE_ID || process.env.GOOGLE_SEARCH_ENGINE_ID;
 
   if (!key || !cx) {
     return mockImageResults(params.query, limit);
