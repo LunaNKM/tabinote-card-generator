@@ -32,10 +32,7 @@ export async function searchImages(params: {
   url.searchParams.set("gl", "jp");
   url.searchParams.set("safe", "active");
 
-  const res = await fetch(url, {
-    // Vercel/Next.js 서버에서 너무 오래 캐시하지 않도록 설정
-    cache: "no-store"
-  });
+  const res = await fetch(url, { cache: "no-store" });
 
   if (!res.ok) {
     const message = await res.text().catch(() => "");
@@ -44,17 +41,15 @@ export async function searchImages(params: {
   }
 
   const data = await res.json();
-  const items: SerpApiImageResult[] = Array.isArray(data.images_results)
-    ? data.images_results
-    : [];
+  const items: SerpApiImageResult[] = Array.isArray(data.images_results) ? data.images_results : [];
 
   const normalized = items
     .filter((item) => Boolean(item.original || item.thumbnail))
-    .slice(0, limit)
     .map((item, index) => {
+      const imageUrl = item.original || item.thumbnail!;
       const sourceUrl = item.link || item.source || "https://serpapi.com";
       return {
-        imageUrl: item.original || item.thumbnail!,
+        imageUrl,
         thumbnailUrl: item.thumbnail || item.original,
         sourceUrl,
         sourceLabel: normalizeSource(sourceUrl),
@@ -62,9 +57,36 @@ export async function searchImages(params: {
         height: item.original_height,
         relevance: Math.max(0.45, 1 - index * 0.04)
       } satisfies ImageSearchResult;
-    });
+    })
+    .filter(isUsableImageResult)
+    .slice(0, limit);
 
   return normalized.length ? normalized : mockImageResults(params.query, limit);
+}
+
+function isUsableImageResult(item: ImageSearchResult) {
+  const image = item.imageUrl.toLowerCase();
+  const source = item.sourceUrl?.toLowerCase() ?? "";
+
+  // These lookaside crawler URLs often return HTML or block hotlinking, causing black cards.
+  const blockedPatterns = [
+    "lookaside.instagram.com/seo/google_widget/crawler",
+    "lookaside.fbsbx.com/lookaside/crawler/media",
+    "facebook.com/photo",
+    "instagram.com/p/"
+  ];
+
+  if (blockedPatterns.some((pattern) => image.includes(pattern))) return false;
+
+  // Prefer the actual media file, not crawler/share pages.
+  if (/\/crawler\//i.test(image)) return false;
+
+  // If both image and source are clearly social crawler pages, reject.
+  if ((image.includes("lookaside") || image.includes("crawler")) && /(instagram|facebook|fbsbx)/i.test(source)) {
+    return false;
+  }
+
+  return true;
 }
 
 function buildQuery(query: string, preference?: SourcePreference) {
@@ -82,7 +104,7 @@ function buildQuery(query: string, preference?: SourcePreference) {
     return `${trimmed} site:pinterest.com`;
   }
 
-  return trimmed;
+  return `${trimmed} -site:lookaside.instagram.com -site:lookaside.fbsbx.com`;
 }
 
 function mockImageResults(query: string, limit: number): ImageSearchResult[] {
