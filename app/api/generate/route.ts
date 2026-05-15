@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import type { Project } from "@/types/project";
-import type { Slide } from "@/types/slide";
+import type { Slide, SlideType } from "@/types/slide";
 import type { ImageSearchResult } from "@/types/image";
 import { generateSlides } from "@/lib/ai/generateSlides";
 import { searchImages, makeImageSignature } from "@/lib/images/searchImages";
@@ -16,6 +16,8 @@ const RequestSchema = z.object({
   includeCta: z.boolean(),
   memo: z.string().optional()
 });
+
+type GenerateInput = z.infer<typeof RequestSchema>;
 
 export async function POST(req: Request) {
   try {
@@ -46,16 +48,16 @@ export async function POST(req: Request) {
     for (let i = 0; i < ai.slides.length; i++) {
       const aiSlide = ai.slides[i];
       const slideId = crypto.randomUUID();
-      const query = buildSlideImageQuery(input.title, aiSlide.title, aiSlide.imageQuery, i, aiSlide.type);
-      const rawCandidates = await searchImages({
-        query,
+      const queryPlan = buildSlideImageQueries(input, ai.title, aiSlide.type, aiSlide.title, aiSlide.imageQuery ?? "", aiSlide.body ?? "");
+      const rawCandidates = await searchAcrossQueries({
+        queries: queryPlan,
         sourcePreference: aiSlide.sourcePreference,
-        limit: aiSlide.imageMode === "collage-4" ? 16 : 12
+        limit: aiSlide.imageMode === "collage-4" ? 20 : 12
       });
 
       const candidates = rawCandidates.filter((candidate) => !usedImageSignatures.has(makeImageSignature(candidate.imageUrl)));
       const pool = candidates.length ? candidates : rawCandidates;
-      const selected = selectBestImage(pool);
+      const selected = selectBestImage(pool, queryPlan[0]);
       const selectedSignature = makeImageSignature(selected?.imageUrl);
       if (selectedSignature) usedImageSignatures.add(selectedSignature);
 
@@ -63,7 +65,7 @@ export async function POST(req: Request) {
         ? pickUniqueImageUrls(pool, usedImageSignatures, 4)
         : null;
 
-      if (imageUrls) {
+      if (imageUrls?.length) {
         imageUrls.forEach((url) => usedImageSignatures.add(makeImageSignature(url)));
       }
 
@@ -80,9 +82,9 @@ export async function POST(req: Request) {
         imageMode: aiSlide.imageMode,
         imageUrl: selected?.imageUrl ?? null,
         imageUrls,
-        imageQuery: query,
+        imageQuery: queryPlan[0],
         imageSourceUrl: selected?.sourceUrl ?? null,
-        sourceLabel: selected?.sourceLabel ?? "Photo | Pinterest",
+        sourceLabel: selected?.sourceLabel ?? null,
         layoutSettings: {},
         createdAt: now,
         updatedAt: now
@@ -97,18 +99,137 @@ export async function POST(req: Request) {
   }
 }
 
-function buildSlideImageQuery(projectTitle: string, slideTitle: string, aiQuery: string, index: number, type: string) {
-  const cleanSlideTitle = slideTitle.replace(/[0-9０-９]+[.．、]?/g, "").replace(/\n/g, " ").trim();
+async function searchAcrossQueries(params: {
+  queries: string[];
+  sourcePreference?: "official" | "retail" | "pinterest" | "any";
+  limit: number;
+}) {
+  const merged: ImageSearchResult[] = [];
+  const seen = new Set<string>();
 
-  if (type === "cover") {
-    return `${projectTitle} 韓国 ダイソー 人気 アイテム 店内 コスメ 売り場`;
+  for (const query of params.queries) {
+    if (!query.trim()) continue;
+    const results = await searchImages({
+      query,
+      sourcePreference: params.sourcePreference,
+      limit: params.limit
+    });
+
+    for (const item of results) {
+      const signature = makeImageSignature(item.imageUrl);
+      if (!signature || seen.has(signature)) continue;
+      seen.add(signature);
+      merged.push(item);
+      if (merged.length >= params.limit) return merged;
+    }
   }
 
-  if (type === "cta") {
-    return `${projectTitle} 韓国 ダイソー 店舗 外観`;
+  return merged;
+}
+
+function buildSlideImageQueries(
+  input: GenerateInput,
+  projectTitle: string,
+  slideType: SlideType,
+  slideTitle: string,
+  aiQuery: string,
+  slideBody: string
+) {
+  const cleanTitle = cleanText(slideTitle);
+  const cleanBody = cleanText(slideBody).split(" ").slice(0, 8).join(" ");
+  const baseTopic = uniqueJoin([projectTitle, cleanTitle, aiQuery, cleanBody]);
+  const categoryWords = getCategoryKeywords(input.category, slideType);
+  const queries = [
+    uniqueJoin([baseTopic, categoryWords.primary]),
+    uniqueJoin([cleanTitle, projectTitle, categoryWords.secondary]),
+    uniqueJoin([cleanTitle, categoryWords.fallback])
+  ];
+
+  return Array.from(new Set(queries.filter(Boolean)));
+}
+
+function getCategoryKeywords(category: GenerateInput["category"], slideType: SlideType) {
+  switch (category) {
+    case "travel":
+      if (slideType === "cover") {
+        return {
+          primary: "ソウル 韓国 旅行 街歩き エリア 風景 実写",
+          secondary: "ソウル 人気 エリア 街並み カフェ 実写",
+          fallback: "Seoul Korea street neighborhood cafe"
+        };
+      }
+      if (slideType === "cta") {
+        return {
+          primary: "ソウル 韓国 街並み 旅行 実写",
+          secondary: "Seoul city street travel photo",
+          fallback: "ソウル 風景 実写"
+        };
+      }
+      return {
+        primary: "ソウル 韓国 エリア 街歩き 風景 実写",
+        secondary: "ソウル 観光 カフェ 路地 実写",
+        fallback: "Seoul neighborhood street photo"
+      };
+    case "beauty":
+      return {
+        primary: slideType === "cover" ? "韓国 コスメ 売り場 商品 実写" : "韓国 コスメ 商品 パッケージ 実写",
+        secondary: "K-beauty product store photo",
+        fallback: "beauty product photo"
+      };
+    case "food":
+      return {
+        primary: "韓国 グルメ 料理 店舗 実写",
+        secondary: "Korean food restaurant photo",
+        fallback: "food photo"
+      };
+    case "fashion":
+      return {
+        primary: "韓国 ファッション ブランド 店舗 実写",
+        secondary: "Korean fashion store street photo",
+        fallback: "fashion photo"
+      };
+    case "lifestyle":
+      return {
+        primary: "韓国 ライフスタイル 雑貨 空間 実写",
+        secondary: "Korean lifestyle interior photo",
+        fallback: "lifestyle photo"
+      };
+    case "trend":
+    default:
+      return {
+        primary: "韓国 トレンド 実写",
+        secondary: "Korean trend photo",
+        fallback: "trend photo"
+      };
+  }
+}
+
+function cleanText(value: string) {
+  return value
+    .replace(/[0-9０-９]+[.．、]?/g, " ")
+    .replace(/[~〜]/g, " ")
+    .replace(/\n/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function uniqueJoin(parts: Array<string | null | undefined>) {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const part of parts) {
+    if (!part) continue;
+    for (const token of part.split(/\s+/)) {
+      const trimmed = token.trim();
+      if (!trimmed) continue;
+      const key = trimmed.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      result.push(trimmed);
+    }
   }
 
-  return `${aiQuery} ${cleanSlideTitle} 韓国 ダイソー 商品 画像 ${index + 1}`;
+  return result.join(" ");
 }
 
 function pickUniqueImageUrls(candidates: ImageSearchResult[], used: Set<string>, count: number) {
@@ -121,16 +242,6 @@ function pickUniqueImageUrls(candidates: ImageSearchResult[], used: Set<string>,
     localSeen.add(signature);
     urls.push(candidate.imageUrl);
     if (urls.length >= count) break;
-  }
-
-  if (urls.length < count) {
-    for (const candidate of candidates) {
-      const signature = makeImageSignature(candidate.imageUrl);
-      if (!signature || localSeen.has(signature)) continue;
-      localSeen.add(signature);
-      urls.push(candidate.imageUrl);
-      if (urls.length >= count) break;
-    }
   }
 
   return urls.length ? urls : null;

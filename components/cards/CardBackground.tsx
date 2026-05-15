@@ -2,15 +2,22 @@ import type { Slide } from "@/types/slide";
 import { getMergedPreset } from "@/lib/layout/cardPresets";
 
 function toSafeImageSrc(url?: string | null) {
-  if (!url) return "https://picsum.photos/seed/tabinote-fallback/1080/1440";
+  if (!url) return null;
   if (url.startsWith("/") || url.startsWith("data:") || url.startsWith("blob:")) return url;
   return `/api/image-proxy?url=${encodeURIComponent(url)}`;
 }
 
+function EmptyBackground() {
+  return <div className="absolute inset-0 bg-[#111111]" />;
+}
+
 function BackgroundImage({ url, positionX = 50, positionY = 50 }: { url?: string | null; positionX?: number; positionY?: number }) {
+  const safeSrc = toSafeImageSrc(url);
+  if (!safeSrc) return <EmptyBackground />;
+
   return (
     <img
-      src={toSafeImageSrc(url)}
+      src={safeSrc}
       alt=""
       className="h-full w-full object-cover"
       style={{ objectPosition: `${positionX}% ${positionY}%` }}
@@ -22,7 +29,7 @@ function BackgroundImage({ url, positionX = 50, positionY = 50 }: { url?: string
 
 export function CardBackground({ slide }: { slide: Slide }) {
   const settings = getMergedPreset(slide.type, slide.layoutSettings);
-  const urls = slide.imageUrls?.length ? slide.imageUrls : slide.imageUrl ? [slide.imageUrl] : [];
+  const urls = slide.imageUrls?.length ? slide.imageUrls.filter(Boolean) : slide.imageUrl ? [slide.imageUrl] : [];
 
   if (slide.imageMode === "collage-4" && urls.length >= 4) {
     return (
@@ -42,6 +49,10 @@ export function CardBackground({ slide }: { slide: Slide }) {
         ))}
       </div>
     );
+  }
+
+  if (!slide.imageUrl) {
+    return <EmptyBackground />;
   }
 
   return (

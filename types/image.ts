@@ -22,4 +22,5 @@ export type ImageSearchResult = {
   width?: number;
   height?: number;
   relevance?: number;
+  title?: string;
 };
