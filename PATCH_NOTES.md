@@ -1,27 +1,18 @@
-# Tabinote 스타일 깨짐 복구 패치
+# ZIP 다운로드 먹통 복구 패치
 
 ## 원인
-이전 설치 안정화/구조 수정 과정에서 Tailwind가 v4 계열(`tailwindcss@4`, `@tailwindcss/postcss`)로 바뀌었지만, 현재 프로젝트의 CSS와 설정은 Tailwind v3 방식(`@tailwind base; @tailwind components; @tailwind utilities;`, `tailwind.config.ts`)을 기준으로 작성되어 있습니다.
+기존 다운로드 버튼은 사용자가 보는 270x360 미리보기 DOM을 직접 캡처하면서 `canvasWidth/canvasHeight`로 1080x1440 변환을 시도했습니다. 이 구조에서는 브라우저/이미지/폰트 로딩 상태에 따라 `html-to-image`가 조용히 실패하거나 오래 멈출 수 있습니다. 실패해도 UI 상태 표시가 없어 버튼이 먹통처럼 보였습니다.
 
-그 결과 Vercel 빌드는 통과해도 Tailwind utility class가 제대로 생성되지 않아 화면이 기본 HTML처럼 깨져 보였습니다.
-
-## 수정
-- `tailwindcss`를 `3.4.17`로 고정
-- `@tailwindcss/postcss` 제거
-- `postcss.config.js`를 Tailwind v3 방식으로 복구
-- `latest` 의존성 제거 및 주요 패키지 버전 고정
-- `.npmrc`에 `legacy-peer-deps=true` 추가
-- `npm run build` 검증 완료
+## 수정 내용
+1. 다운로드 클릭 시 1080x1440 export 전용 DOM을 임시 생성합니다.
+2. export DOM에는 현재 store의 같은 slide 데이터를 렌더링합니다.
+3. 렌더링 후 폰트와 이미지 로딩을 기다립니다.
+4. 각 슬라이드를 PNG Blob으로 만든 뒤 ZIP으로 묶습니다.
+5. 완료 또는 실패 후 임시 DOM을 즉시 제거합니다.
+6. 버튼에 `PNG 생성 중...` 상태와 오류 메시지를 표시합니다.
 
 ## 적용 파일
-- package.json
-- package-lock.json
-- postcss.config.js
-- .npmrc
+- `components/generator/DownloadButton.tsx`
 
-## 적용 방법
-1. 위 파일을 GitHub 저장소 루트에 덮어쓰기
-2. Commit changes
-3. Vercel Redeploy
-
-주의: 이 패치를 적용한 뒤에는 이전의 `@tailwindcss/postcss` 기반 패치를 다시 덮어쓰지 마세요.
+## 빌드 확인
+- `npm run build` 통과 확인 완료
