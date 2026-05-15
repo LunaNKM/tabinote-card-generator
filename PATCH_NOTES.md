@@ -1,26 +1,175 @@
-# tabinote image preview/export sync patch
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import type { Project } from "@/types/project";
+import type { Slide } from "@/types/slide";
+import type { ImageSearchResult } from "@/types/image";
+import { generateSlides } from "@/lib/ai/generateSlides";
+import { searchImages, makeImageSignature } from "@/lib/images/searchImages";
+import { selectBestImage } from "@/lib/images/selectBestImage";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-## 수정 내용
+const RequestSchema = z.object({
+  title: z.string().min(1),
+  category: z.enum(["beauty", "travel", "lifestyle", "food", "fashion", "trend"]),
+  slideCount: z.number().int().min(1).max(8),
+  includeCover: z.boolean(),
+  includeCta: z.boolean(),
+  memo: z.string().optional()
+});
 
-1. 미리보기와 다운로드 결과가 달라지는 문제 수정
-   - 이제 미리보기는 1080×1440 실제 카드 컴포넌트를 0.25배 축소해서 보여줍니다.
-   - 다운로드도 같은 컴포넌트를 그대로 사용합니다.
+export async function POST(req: Request) {
+  try {
+    const input = RequestSchema.parse(await req.json());
+    const ai = await generateSlides(input);
+    const now = new Date().toISOString();
+    const projectId = crypto.randomUUID();
+    const usedImageSignatures = new Set<string>();
 
-2. 외부 이미지 CORS/핫링크 문제 수정
-   - `/api/image-proxy`를 추가했습니다.
-   - 카드 배경 이미지는 직접 외부 URL을 물지 않고, 동일 도메인 프록시를 거쳐 불러옵니다.
-   - html-to-image 다운로드 시 외부 이미지 때문에 누락되는 문제를 줄입니다.
+    const project: Project = {
+      id: projectId,
+      title: ai.title,
+      category: ai.category,
+      memo: input.memo ?? null,
+      status: "generated",
+      slideCount: input.slideCount,
+      includeCover: input.includeCover,
+      includeCta: input.includeCta,
+      aiModel: process.env.OPENAI_MODEL || "mock",
+      aiInput: input,
+      aiOutput: ai,
+      createdAt: now,
+      updatedAt: now
+    };
 
-3. Instagram/Facebook lookaside crawler URL 필터링
-   - 아래 형태의 URL은 실제 이미지가 아니라 crawler/share 페이지라 검정 배경으로 나오는 경우가 많습니다.
-   - SerpAPI 결과에서 자동 제외합니다.
-   - `lookaside.instagram.com/seo/google_widget/crawler`
-   - `lookaside.fbsbx.com/lookaside/crawler/media`
+    const slides: Slide[] = [];
 
-4. ZIP 다운로드 안정화
-   - 이미지 로딩 완료를 기다린 뒤 PNG를 생성합니다.
-   - 다운로드 버튼에 `PNG 생성 중...` 상태를 추가했습니다.
+    for (let i = 0; i < ai.slides.length; i++) {
+      const aiSlide = ai.slides[i];
+      const slideId = crypto.randomUUID();
+      const query = buildSlideImageQuery(input.title, aiSlide.title, aiSlide.imageQuery, i, aiSlide.type);
+      const rawCandidates = await searchImages({
+        query,
+        sourcePreference: aiSlide.sourcePreference,
+        limit: aiSlide.imageMode === "collage-4" ? 16 : 12
+      });
 
-## 적용 방법
+      const candidates = rawCandidates.filter((candidate) => !usedImageSignatures.has(makeImageSignature(candidate.imageUrl)));
+      const pool = candidates.length ? candidates : rawCandidates;
+      const selected = selectBestImage(pool);
+      const selectedSignature = makeImageSignature(selected?.imageUrl);
+      if (selectedSignature) usedImageSignatures.add(selectedSignature);
 
-ZIP 안의 파일을 GitHub 저장소의 같은 위치에 덮어쓴 뒤 Commit changes를 누르고 Vercel에서 재배포하세요.
+      const imageUrls = aiSlide.imageMode === "collage-4"
+        ? pickUniqueImageUrls(pool, usedImageSignatures, 4)
+        : null;
+
+      if (imageUrls) {
+        imageUrls.forEach((url) => usedImageSignatures.add(makeImageSignature(url)));
+      }
+
+      slides.push({
+        id: slideId,
+        projectId,
+        order: i + 1,
+        type: aiSlide.type,
+        title: aiSlide.title,
+        subtitle: aiSlide.subtitle ?? null,
+        hook: aiSlide.hook ?? null,
+        body: aiSlide.body ?? null,
+        bullets: aiSlide.bullets ?? null,
+        imageMode: aiSlide.imageMode,
+        imageUrl: selected?.imageUrl ?? null,
+        imageUrls,
+        imageQuery: query,
+        imageSourceUrl: selected?.sourceUrl ?? null,
+        sourceLabel: selected?.sourceLabel ?? "Photo | Pinterest",
+        layoutSettings: {},
+        createdAt: now,
+        updatedAt: now
+      });
+    }
+
+    await tryPersist(project, slides);
+
+    return NextResponse.json({ project, slides });
+  } catch (error) {
+    return new NextResponse(error instanceof Error ? error.message : "Generate failed", { status: 500 });
+  }
+}
+
+function buildSlideImageQuery(projectTitle: string, slideTitle: string, aiQuery: string, index: number, type: string) {
+  const cleanSlideTitle = slideTitle.replace(/[0-9０-９]+[.．、]?/g, "").replace(/\n/g, " ").trim();
+
+  if (type === "cover") {
+    return `${projectTitle} 韓国 ダイソー 人気 アイテム 店内 コスメ 売り場`;
+  }
+
+  if (type === "cta") {
+    return `${projectTitle} 韓国 ダイソー 店舗 外観`;
+  }
+
+  return `${aiQuery} ${cleanSlideTitle} 韓国 ダイソー 商品 画像 ${index + 1}`;
+}
+
+function pickUniqueImageUrls(candidates: ImageSearchResult[], used: Set<string>, count: number) {
+  const urls: string[] = [];
+  const localSeen = new Set<string>();
+
+  for (const candidate of candidates) {
+    const signature = makeImageSignature(candidate.imageUrl);
+    if (!signature || used.has(signature) || localSeen.has(signature)) continue;
+    localSeen.add(signature);
+    urls.push(candidate.imageUrl);
+    if (urls.length >= count) break;
+  }
+
+  if (urls.length < count) {
+    for (const candidate of candidates) {
+      const signature = makeImageSignature(candidate.imageUrl);
+      if (!signature || localSeen.has(signature)) continue;
+      localSeen.add(signature);
+      urls.push(candidate.imageUrl);
+      if (urls.length >= count) break;
+    }
+  }
+
+  return urls.length ? urls : null;
+}
+
+async function tryPersist(project: Project, slides: Slide[]) {
+  const supabase = createServerSupabaseClient();
+  if (!supabase) return;
+
+  await supabase.from("projects").insert({
+    id: project.id,
+    title: project.title,
+    category: project.category,
+    memo: project.memo,
+    status: project.status,
+    slide_count: project.slideCount,
+    include_cover: project.includeCover,
+    include_cta: project.includeCta,
+    ai_model: project.aiModel,
+    ai_input: project.aiInput,
+    ai_output: project.aiOutput
+  });
+
+  await supabase.from("slides").insert(slides.map((s) => ({
+    id: s.id,
+    project_id: s.projectId,
+    slide_order: s.order,
+    slide_type: s.type,
+    title: s.title,
+    subtitle: s.subtitle,
+    body: s.body,
+    hook: s.hook,
+    bullets: s.bullets,
+    image_mode: s.imageMode,
+    image_url: s.imageUrl,
+    image_urls: s.imageUrls,
+    image_query: s.imageQuery,
+    image_source_url: s.imageSourceUrl,
+    source_label: s.sourceLabel,
+    layout_settings: s.layoutSettings
+  })));
+}

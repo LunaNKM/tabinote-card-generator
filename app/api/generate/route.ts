@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import type { Project } from "@/types/project";
 import type { Slide } from "@/types/slide";
+import type { ImageSearchResult } from "@/types/image";
 import { generateSlides } from "@/lib/ai/generateSlides";
-import { searchImages } from "@/lib/images/searchImages";
+import { searchImages, makeImageSignature } from "@/lib/images/searchImages";
 import { selectBestImage } from "@/lib/images/selectBestImage";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -22,6 +23,7 @@ export async function POST(req: Request) {
     const ai = await generateSlides(input);
     const now = new Date().toISOString();
     const projectId = crypto.randomUUID();
+    const usedImageSignatures = new Set<string>();
 
     const project: Project = {
       id: projectId,
@@ -40,15 +42,31 @@ export async function POST(req: Request) {
     };
 
     const slides: Slide[] = [];
+
     for (let i = 0; i < ai.slides.length; i++) {
       const aiSlide = ai.slides[i];
-      const candidates = await searchImages({
-        query: aiSlide.imageQuery,
-        sourcePreference: aiSlide.sourcePreference,
-        limit: aiSlide.imageMode === "collage-4" ? 4 : 8
-      });
-      const selected = selectBestImage(candidates);
       const slideId = crypto.randomUUID();
+      const query = buildSlideImageQuery(input.title, aiSlide.title, aiSlide.imageQuery, i, aiSlide.type);
+      const rawCandidates = await searchImages({
+        query,
+        sourcePreference: aiSlide.sourcePreference,
+        limit: aiSlide.imageMode === "collage-4" ? 16 : 12
+      });
+
+      const candidates = rawCandidates.filter((candidate) => !usedImageSignatures.has(makeImageSignature(candidate.imageUrl)));
+      const pool = candidates.length ? candidates : rawCandidates;
+      const selected = selectBestImage(pool);
+      const selectedSignature = makeImageSignature(selected?.imageUrl);
+      if (selectedSignature) usedImageSignatures.add(selectedSignature);
+
+      const imageUrls = aiSlide.imageMode === "collage-4"
+        ? pickUniqueImageUrls(pool, usedImageSignatures, 4)
+        : null;
+
+      if (imageUrls) {
+        imageUrls.forEach((url) => usedImageSignatures.add(makeImageSignature(url)));
+      }
+
       slides.push({
         id: slideId,
         projectId,
@@ -61,8 +79,8 @@ export async function POST(req: Request) {
         bullets: aiSlide.bullets ?? null,
         imageMode: aiSlide.imageMode,
         imageUrl: selected?.imageUrl ?? null,
-        imageUrls: aiSlide.imageMode === "collage-4" ? candidates.slice(0, 4).map((c) => c.imageUrl) : null,
-        imageQuery: aiSlide.imageQuery,
+        imageUrls,
+        imageQuery: query,
         imageSourceUrl: selected?.sourceUrl ?? null,
         sourceLabel: selected?.sourceLabel ?? "Photo | Pinterest",
         layoutSettings: {},
@@ -77,6 +95,45 @@ export async function POST(req: Request) {
   } catch (error) {
     return new NextResponse(error instanceof Error ? error.message : "Generate failed", { status: 500 });
   }
+}
+
+function buildSlideImageQuery(projectTitle: string, slideTitle: string, aiQuery: string, index: number, type: string) {
+  const cleanSlideTitle = slideTitle.replace(/[0-9０-９]+[.．、]?/g, "").replace(/\n/g, " ").trim();
+
+  if (type === "cover") {
+    return `${projectTitle} 韓国 ダイソー 人気 アイテム 店内 コスメ 売り場`;
+  }
+
+  if (type === "cta") {
+    return `${projectTitle} 韓国 ダイソー 店舗 外観`;
+  }
+
+  return `${aiQuery} ${cleanSlideTitle} 韓国 ダイソー 商品 画像 ${index + 1}`;
+}
+
+function pickUniqueImageUrls(candidates: ImageSearchResult[], used: Set<string>, count: number) {
+  const urls: string[] = [];
+  const localSeen = new Set<string>();
+
+  for (const candidate of candidates) {
+    const signature = makeImageSignature(candidate.imageUrl);
+    if (!signature || used.has(signature) || localSeen.has(signature)) continue;
+    localSeen.add(signature);
+    urls.push(candidate.imageUrl);
+    if (urls.length >= count) break;
+  }
+
+  if (urls.length < count) {
+    for (const candidate of candidates) {
+      const signature = makeImageSignature(candidate.imageUrl);
+      if (!signature || localSeen.has(signature)) continue;
+      localSeen.add(signature);
+      urls.push(candidate.imageUrl);
+      if (urls.length >= count) break;
+    }
+  }
+
+  return urls.length ? urls : null;
 }
 
 async function tryPersist(project: Project, slides: Slide[]) {

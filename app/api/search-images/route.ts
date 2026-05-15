@@ -1,33 +1,15 @@
 import { NextResponse } from "next/server";
-import { searchImages } from "@/lib/images/searchImages";
+import { searchImages, makeImageSignature } from "@/lib/images/searchImages";
 import { selectBestImage } from "@/lib/images/selectBestImage";
 
 export async function POST(req: Request) {
-  try {
-    const body = await req.json();
+  const body = await req.json();
+  const excludeUrls = new Set<string>((body.excludeUrls || []).map((url: string) => makeImageSignature(url)));
+  const candidates = (await searchImages({
+    query: body.query,
+    sourcePreference: body.sourcePreference || "any",
+    limit: body.limit || 12
+  })).filter((candidate) => !excludeUrls.has(makeImageSignature(candidate.imageUrl)));
 
-    if (!body?.query || typeof body.query !== "string") {
-      return NextResponse.json(
-        { error: "query is required" },
-        { status: 400 }
-      );
-    }
-
-    const candidates = await searchImages({
-      query: body.query,
-      sourcePreference: body.sourcePreference || "any",
-      limit: body.limit || 8
-    });
-
-    return NextResponse.json({
-      candidates,
-      selectedCandidate: selectBestImage(candidates)
-    });
-  } catch (error) {
-    console.error("/api/search-images failed", error);
-    return NextResponse.json(
-      { error: "Image search failed" },
-      { status: 500 }
-    );
-  }
+  return NextResponse.json({ candidates, selectedCandidate: selectBestImage(candidates) });
 }

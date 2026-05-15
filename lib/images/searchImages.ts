@@ -17,7 +17,7 @@ export async function searchImages(params: {
   sourcePreference?: SourcePreference;
   limit?: number;
 }): Promise<ImageSearchResult[]> {
-  const limit = Math.min(Math.max(params.limit ?? 8, 1), 20);
+  const limit = Math.min(Math.max(params.limit ?? 8, 1), 30);
   const apiKey = process.env.SERPAPI_API_KEY;
 
   if (!apiKey) {
@@ -55,56 +55,92 @@ export async function searchImages(params: {
         sourceLabel: normalizeSource(sourceUrl),
         width: item.original_width,
         height: item.original_height,
-        relevance: Math.max(0.45, 1 - index * 0.04)
+        relevance: Math.max(0.45, 1 - index * 0.035)
       } satisfies ImageSearchResult;
     })
-    .filter(isUsableImageResult)
-    .slice(0, limit);
+    .filter(isUsableImageResult);
 
-  return normalized.length ? normalized : mockImageResults(params.query, limit);
+  const unique = dedupeImageResults(normalized).slice(0, limit);
+  return unique.length ? unique : mockImageResults(params.query, limit);
 }
 
-function isUsableImageResult(item: ImageSearchResult) {
+export function isUsableImageResult(item: ImageSearchResult) {
   const image = item.imageUrl.toLowerCase();
   const source = item.sourceUrl?.toLowerCase() ?? "";
+  const combined = `${image} ${source}`;
 
-  // These lookaside crawler URLs often return HTML or block hotlinking, causing black cards.
   const blockedPatterns = [
-    "lookaside.instagram.com/seo/google_widget/crawler",
-    "lookaside.fbsbx.com/lookaside/crawler/media",
+    "lookaside.instagram.com",
+    "lookaside.fbsbx.com",
     "facebook.com/photo",
-    "instagram.com/p/"
+    "instagram.com/p/",
+    "instagram.com/reel/",
+    "tiktok.com/api/img",
+    "tiktokcdn.com",
+    "tiktok.com/@",
+    "tiktok.com/embed",
+    "tiktok.com/oembed",
+    "/crawler/",
+    "google_widget/crawler",
+    "encrypted-tbn0.gstatic.com"
   ];
 
-  if (blockedPatterns.some((pattern) => image.includes(pattern))) return false;
+  if (blockedPatterns.some((pattern) => combined.includes(pattern))) return false;
 
-  // Prefer the actual media file, not crawler/share pages.
-  if (/\/crawler\//i.test(image)) return false;
+  // SerpAPI sometimes returns HTML/crawler endpoints as image URLs. Keep only likely media URLs.
+  if (/\.(html?|php|aspx?)(\?|$)/i.test(image)) return false;
 
-  // If both image and source are clearly social crawler pages, reject.
-  if ((image.includes("lookaside") || image.includes("crawler")) && /(instagram|facebook|fbsbx)/i.test(source)) {
+  // Avoid social API image endpoints that often render black in html-to-image/export.
+  if (/(instagram|facebook|fbsbx|tiktok)/i.test(image) && !/\.(jpe?g|png|webp|gif)(\?|$)/i.test(image)) {
     return false;
   }
 
   return true;
 }
 
+export function makeImageSignature(url?: string | null) {
+  if (!url) return "";
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
+    const path = parsed.pathname.replace(/\/$/, "").toLowerCase();
+    return `${host}${path}`;
+  } catch {
+    return url.toLowerCase().split("?")[0];
+  }
+}
+
+export function dedupeImageResults(items: ImageSearchResult[]) {
+  const seen = new Set<string>();
+  const result: ImageSearchResult[] = [];
+
+  for (const item of items) {
+    const signature = makeImageSignature(item.imageUrl);
+    if (!signature || seen.has(signature)) continue;
+    seen.add(signature);
+    result.push(item);
+  }
+
+  return result;
+}
+
 function buildQuery(query: string, preference?: SourcePreference) {
   const trimmed = query.trim();
+  const exclusions = "-site:lookaside.instagram.com -site:lookaside.fbsbx.com -site:tiktok.com/api -site:tiktokcdn.com -site:facebook.com/photo";
 
   if (preference === "official") {
-    return `${trimmed} 공식 official brand site`;
+    return `${trimmed} 公式 official brand site ${exclusions}`;
   }
 
   if (preference === "retail") {
-    return `${trimmed} 올리브영 다이소 롯데 쇼핑몰 공식`;
+    return `${trimmed} 올리브영 다이소 롯데 쇼핑몰 공식 ${exclusions}`;
   }
 
   if (preference === "pinterest") {
-    return `${trimmed} site:pinterest.com`;
+    return `${trimmed} site:pinterest.com ${exclusions}`;
   }
 
-  return `${trimmed} -site:lookaside.instagram.com -site:lookaside.fbsbx.com`;
+  return `${trimmed} ${exclusions}`;
 }
 
 function mockImageResults(query: string, limit: number): ImageSearchResult[] {
