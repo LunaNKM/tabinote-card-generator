@@ -29,14 +29,6 @@ export function PreviewPanel() {
         )}
       </div>
       <EditPanel />
-
-      <div className="pointer-events-none fixed -left-[9999px] top-0">
-        {slides.map((slide) => (
-          <div key={slide.id} id={`export-card-${slide.id}`}>
-            <InstagramCard slide={slide} renderMode="export" />
-          </div>
-        ))}
-      </div>
     </section>
   );
 }

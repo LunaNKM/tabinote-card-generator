@@ -26,13 +26,29 @@ const BLOCKED_PATTERNS = [
   "tiktok.com/oembed",
   "/crawler/",
   "google_widget/crawler",
-  "encrypted-tbn0.gstatic.com"
+  "encrypted-tbn0.gstatic.com",
+  "picsum.photos"
+];
+
+const MAP_LIKE_PATTERNS = [
+  "地図",
+  "マップ",
+  "map",
+  "maps",
+  "路線図",
+  "地下鉄",
+  "subway",
+  "metro",
+  "route map",
+  "アクセスマップ",
+  "案内図"
 ];
 
 const STOPWORDS = new Set([
   "韓国", "한국", "ソウル", "서울", "旅行", "여행", "散歩", "ルート", "おすすめ", "人気", "ガチ",
   "写真", "画像", "スポット", "エリア", "観光", "place", "travel", "item", "trend", "cover", "cta",
-  "の", "で", "を", "と", "に", "へ", "から", "まで", "route", "best", "top", "guide", "real"
+  "の", "で", "を", "と", "に", "へ", "から", "まで", "route", "best", "top", "guide", "real",
+  "選", "定番", "今", "っぽい", "空気", "歩きたい", "人", "向け"
 ]);
 
 export async function searchImages(params: {
@@ -83,7 +99,7 @@ export async function searchImages(params: {
         title: item.title || ""
       } satisfies ImageSearchResult;
     })
-    .filter(isUsableImageResult);
+    .filter((item) => isUsableImageResult(item, params.query));
 
   const unique = dedupeImageResults(normalized);
   const reranked = rerankByQuery(unique, params.query).slice(0, limit);
@@ -96,10 +112,11 @@ export async function searchImages(params: {
   return reranked;
 }
 
-export function isUsableImageResult(item: ImageSearchResult) {
+export function isUsableImageResult(item: ImageSearchResult, query = "") {
   const image = item.imageUrl.toLowerCase();
   const source = item.sourceUrl?.toLowerCase() ?? "";
-  const combined = `${image} ${source}`;
+  const title = item.title?.toLowerCase() ?? "";
+  const combined = `${image} ${source} ${title}`;
 
   if (BLOCKED_PATTERNS.some((pattern) => combined.includes(pattern))) return false;
   if (/\.(html?|php|aspx?)(\?|$)/i.test(image)) return false;
@@ -107,6 +124,10 @@ export function isUsableImageResult(item: ImageSearchResult) {
   if (/(instagram|facebook|fbsbx|tiktok)/i.test(image) && !/\.(jpe?g|png|webp|gif)(\?|$)/i.test(image)) {
     return false;
   }
+
+  // Route/travel content frequently returns maps. We want actual Instagram-card background photos.
+  const isTravelQuery = /(ソウル|서울|seoul|韓国|한국|korea|散歩|街歩き|カフェ|通り|路地|聖水|西村|延南|漢南|梨泰院|汝矣島|弘大|安国|北村|江南)/i.test(query);
+  if (isTravelQuery && MAP_LIKE_PATTERNS.some((pattern) => combined.includes(pattern))) return false;
 
   return true;
 }
@@ -145,8 +166,9 @@ function scoreForQuery(item: ImageSearchResult, query: string) {
   const queryMatch = getQueryMatchScore(query, item);
   const resolution = getResolutionScore(item.width, item.height);
   const source = getSourceScore(item.sourceUrl);
+  const crop = getCropFitScore(item.width, item.height);
   const base = item.relevance ?? 0.5;
-  return base * 0.45 + queryMatch * 0.35 + resolution * 0.1 + source * 0.1;
+  return base * 0.35 + queryMatch * 0.35 + source * 0.15 + resolution * 0.1 + crop * 0.05;
 }
 
 function getQueryMatchScore(query: string, item: ImageSearchResult) {
@@ -161,8 +183,6 @@ function getQueryMatchScore(query: string, item: ImageSearchResult) {
   }
 
   const ratio = matched / tokens.length;
-
-  // If no token matched, do not fully discard the candidate because Google rank still matters.
   return Math.max(0.15, ratio);
 }
 
@@ -184,10 +204,17 @@ function getResolutionScore(w?: number, h?: number) {
   return 0.45;
 }
 
+function getCropFitScore(w?: number, h?: number) {
+  if (!w || !h) return 0.55;
+  const ratio = w / h;
+  const target = 1080 / 1440;
+  return Math.max(0, 1 - Math.abs(ratio - target));
+}
+
 function getSourceScore(url?: string) {
   if (!url) return 0.4;
-  if (/official|oliveyoung|lotte|daiso|brand|instagram|naver|blog|visitseoul|korea/i.test(url)) return 0.85;
-  if (/pinterest/i.test(url)) return 0.65;
+  if (/visitseoul|seoul|korea|naver|blog|official|oliveyoung|lotte|daiso|brand|instagram/i.test(url)) return 0.85;
+  if (/pinterest|4travel|funliday|wagamamatravel/i.test(url)) return 0.65;
   return 0.55;
 }
 
@@ -199,7 +226,12 @@ function buildQuery(query: string, preference?: SourcePreference) {
     "-site:tiktok.com/api",
     "-site:tiktokcdn.com",
     "-site:facebook.com/photo",
-    "-site:picsum.photos"
+    "-site:picsum.photos",
+    "-地図",
+    "-マップ",
+    "-map",
+    "-路線図",
+    "-地下鉄"
   ].join(" ");
 
   if (preference === "official") {
@@ -214,7 +246,7 @@ function buildQuery(query: string, preference?: SourcePreference) {
     return `${trimmed} site:pinterest.com ${exclusions}`;
   }
 
-  return `${trimmed} 実写 ${exclusions}`;
+  return `${trimmed} 実写 写真 ${exclusions}`;
 }
 
 function maybeMockResults(query: string, limit: number, reason: string): ImageSearchResult[] {

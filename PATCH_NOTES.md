@@ -1,34 +1,42 @@
-# Tabinote image relevance + no-fake-fallback patch
+# Tabinote full image/export stability patch
 
-## What this patch fixes
+## Fixed issues
 
-1. **Removed the hardcoded Daiso query logic**
-   - The previous patch accidentally forced travel topics to search with Daiso-related keywords.
-   - This patch builds image queries from the actual project title, slide title, category, and slide type.
+### 1. Preview/download mismatch
+- Removed hidden duplicate export cards from `PreviewPanel`.
+- `DownloadButton` now captures the exact same 1080x1440 card frame used inside preview.
+- This prevents preview and downloaded PNG from loading different remote images.
 
-2. **Stops showing random mock images when search fails**
-   - Before: if SerpAPI failed or returned nothing, the app silently used `picsum.photos`, which caused irrelevant forest/dog/random images.
-   - Now: by default, failed search returns **no image**, and the card shows a clean dark background instead of fake/random photos.
-   - If you explicitly want old behavior, set `ALLOW_IMAGE_MOCKS=true`.
+### 2. Repeated image issue
+- Generation keeps a project-level `usedImageSignatures` set.
+- The same image URL cannot be selected repeatedly across slides unless there are truly no alternatives.
 
-3. **Improves query relevance for travel topics**
-   - Travel cards now search with Seoul/travel/street/neighborhood keywords instead of beauty or Daiso keywords.
-   - Each slide uses several fallback queries based on title + AI query + category.
+### 3. Irrelevant travel images
+- Removed topic-agnostic fallback behavior.
+- Travel image queries now focus on specific place names such as 聖水, 西村, 延南洞, 漢南, 梨泰院, 弘大, 安国, etc.
+- Route/map words are excluded from image search so maps/screenshots are less likely to appear.
 
-4. **Keeps blocked social/crawler URLs out**
-   - TikTok/Instagram/Facebook crawler and API image endpoints remain blocked.
+### 4. Mock/random image hiding real problems
+- Random `picsum.photos` fallback is disabled by default.
+- If SerpAPI fails, returns empty, or API key is missing, the card uses a clean black background instead of unrelated random images.
+- To intentionally re-enable mock images for local testing, set `ALLOW_IMAGE_MOCKS=true`.
 
-5. **Prevents same image from repeating across multiple slides**
-   - Duplicate image signatures are filtered at generation time.
+### 5. Hotlink/crawler blocked images
+- TikTok/Instagram/Facebook crawler/API image endpoints remain blocked.
+- Image rendering still goes through `/api/image-proxy` for safer html-to-image export.
 
 ## Files included
 - `app/api/generate/route.ts`
 - `app/api/search-images/route.ts`
+- `app/api/image-proxy/route.ts`
 - `components/cards/CardBackground.tsx`
+- `components/cards/InstagramCard.tsx`
+- `components/generator/DownloadButton.tsx`
+- `components/layout/PreviewPanel.tsx`
 - `lib/images/searchImages.ts`
 - `lib/images/selectBestImage.ts`
 - `types/image.ts`
 
-## Important note
-If your `SERPAPI_API_KEY` is missing or exhausted, the app will now show a dark background instead of unrelated random images.
-That is intentional, because it makes the real failure obvious instead of hiding it.
+## Required env
+- `SERPAPI_API_KEY` must be set in Vercel.
+- Do not set `ALLOW_IMAGE_MOCKS=true` in production unless you want random placeholder images.

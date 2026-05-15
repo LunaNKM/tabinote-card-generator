@@ -33,7 +33,7 @@ export function DownloadButton() {
     try {
       const files = [];
       for (let i = 0; i < slides.length; i++) {
-        const node = document.getElementById(`export-card-${slides[i].id}`) as HTMLElement | null;
+        const node = document.getElementById(`card-frame-${slides[i].id}`) as HTMLElement | null;
         if (!node) continue;
         await waitForImages(node);
         const blob = await toBlob(node, {
@@ -41,7 +41,7 @@ export function DownloadButton() {
           pixelRatio: 1,
           width: 1080,
           height: 1440,
-          style: { width: "1080px", height: "1440px" }
+          style: { width: "1080px", height: "1440px", transform: "none" }
         });
         if (blob) files.push({ fileName: getSlideFileName(slides[i], i), blob });
       }

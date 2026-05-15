@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import type { Project } from "@/types/project";
 import type { Slide, SlideType } from "@/types/slide";
-import type { ImageSearchResult } from "@/types/image";
+import type { ImageSearchResult, SourcePreference } from "@/types/image";
 import { generateSlides } from "@/lib/ai/generateSlides";
 import { searchImages, makeImageSignature } from "@/lib/images/searchImages";
 import { selectBestImage } from "@/lib/images/selectBestImage";
@@ -49,10 +49,11 @@ export async function POST(req: Request) {
       const aiSlide = ai.slides[i];
       const slideId = crypto.randomUUID();
       const queryPlan = buildSlideImageQueries(input, ai.title, aiSlide.type, aiSlide.title, aiSlide.imageQuery ?? "", aiSlide.body ?? "");
+      const preferredSource = normalizePreference(input.category, aiSlide.sourcePreference);
       const rawCandidates = await searchAcrossQueries({
         queries: queryPlan,
-        sourcePreference: aiSlide.sourcePreference,
-        limit: aiSlide.imageMode === "collage-4" ? 20 : 12
+        sourcePreference: preferredSource,
+        limit: aiSlide.imageMode === "collage-4" ? 28 : 18
       });
 
       const candidates = rawCandidates.filter((candidate) => !usedImageSignatures.has(makeImageSignature(candidate.imageUrl)));
@@ -99,9 +100,14 @@ export async function POST(req: Request) {
   }
 }
 
+function normalizePreference(category: GenerateInput["category"], preference?: SourcePreference): SourcePreference {
+  if (category === "travel") return "any";
+  return preference ?? "any";
+}
+
 async function searchAcrossQueries(params: {
   queries: string[];
-  sourcePreference?: "official" | "retail" | "pinterest" | "any";
+  sourcePreference?: SourcePreference;
   limit: number;
 }) {
   const merged: ImageSearchResult[] = [];
@@ -135,41 +141,68 @@ function buildSlideImageQueries(
   aiQuery: string,
   slideBody: string
 ) {
+  if (input.category === "travel") {
+    return buildTravelQueries(projectTitle, slideType, slideTitle, aiQuery, slideBody);
+  }
+
   const cleanTitle = cleanText(slideTitle);
   const cleanBody = cleanText(slideBody).split(" ").slice(0, 8).join(" ");
   const baseTopic = uniqueJoin([projectTitle, cleanTitle, aiQuery, cleanBody]);
   const categoryWords = getCategoryKeywords(input.category, slideType);
-  const queries = [
+
+  return Array.from(new Set([
     uniqueJoin([baseTopic, categoryWords.primary]),
     uniqueJoin([cleanTitle, projectTitle, categoryWords.secondary]),
     uniqueJoin([cleanTitle, categoryWords.fallback])
+  ].filter(Boolean)));
+}
+
+function buildTravelQueries(projectTitle: string, slideType: SlideType, slideTitle: string, aiQuery: string, slideBody: string) {
+  const cleanTitle = cleanText(slideTitle);
+  const placeHint = extractTravelPlace(cleanTitle, aiQuery, slideBody, projectTitle);
+
+  if (slideType === "cover") {
+    return Array.from(new Set([
+      uniqueJoin([projectTitle, "ソウル 街歩き カフェ 通り 路地 写真"]),
+      "ソウル 韓国 街歩き カフェ 通り 写真",
+      "Seoul Korea neighborhood street cafe photo"
+    ]));
+  }
+
+  if (slideType === "cta") {
+    return Array.from(new Set([
+      uniqueJoin(["ソウル 韓国 街歩き カフェ 通り 写真", placeHint]),
+      "ソウル 韓国 街並み カフェ 路地 写真",
+      "Seoul street cafe neighborhood photo"
+    ]));
+  }
+
+  return Array.from(new Set([
+    uniqueJoin([placeHint, "ソウル 韓国 街並み カフェ 通り 写真"]),
+    uniqueJoin([placeHint, "Seoul neighborhood street cafe photo"]),
+    uniqueJoin([cleanTitle, "ソウル 街歩き 写真"])
+  ].filter(Boolean)));
+}
+
+function extractTravelPlace(cleanTitle: string, aiQuery: string, slideBody: string, projectTitle: string) {
+  const combined = `${cleanTitle} ${aiQuery} ${slideBody} ${projectTitle}`;
+  const candidates = [
+    "聖水", "西村", "延南洞", "延南", "京義線森の道", "漢南洞", "漢南", "梨泰院", "汝矣島", "弘大", "安国", "北村", "益善洞", "江南", "狎鴎亭", "新沙", "明洞", "乙支路", "景福宮"
   ];
 
-  return Array.from(new Set(queries.filter(Boolean)));
+  const matched = candidates.filter((name) => combined.includes(name));
+  if (matched.length) return matched.join(" ");
+
+  return cleanTitle
+    .replace(/王道だけど.*$/g, "")
+    .replace(/大人っぽく.*$/g, "")
+    .replace(/しっとり.*$/g, "")
+    .replace(/トレンド感.*$/g, "")
+    .trim();
 }
 
 function getCategoryKeywords(category: GenerateInput["category"], slideType: SlideType) {
   switch (category) {
-    case "travel":
-      if (slideType === "cover") {
-        return {
-          primary: "ソウル 韓国 旅行 街歩き エリア 風景 実写",
-          secondary: "ソウル 人気 エリア 街並み カフェ 実写",
-          fallback: "Seoul Korea street neighborhood cafe"
-        };
-      }
-      if (slideType === "cta") {
-        return {
-          primary: "ソウル 韓国 街並み 旅行 実写",
-          secondary: "Seoul city street travel photo",
-          fallback: "ソウル 風景 実写"
-        };
-      }
-      return {
-        primary: "ソウル 韓国 エリア 街歩き 風景 実写",
-        secondary: "ソウル 観光 カフェ 路地 実写",
-        fallback: "Seoul neighborhood street photo"
-      };
     case "beauty":
       return {
         primary: slideType === "cover" ? "韓国 コスメ 売り場 商品 実写" : "韓国 コスメ 商品 パッケージ 実写",

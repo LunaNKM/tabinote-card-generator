@@ -12,7 +12,7 @@ function CardFrame({ slide }: { slide: Slide }) {
 
   return (
     <div
-      id={`card-${slide.id}`}
+      id={`card-frame-${slide.id}`}
       className="relative overflow-hidden bg-black font-pretendard"
       style={{ width: 1080, height: 1440 }}
     >
