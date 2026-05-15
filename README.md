@@ -63,8 +63,8 @@ SUPABASE_SERVICE_ROLE_KEY=
 이미지 검색을 실제로 쓰려면:
 
 ```text
-GOOGLE_SEARCH_API_KEY=
-GOOGLE_SEARCH_ENGINE_ID=
+IMAGE_SEARCH_API_KEY=
+IMAGE_SEARCH_ENGINE_ID=
 ```
 
 키가 없으면 mock 이미지와 mock 문안으로 동작합니다.
