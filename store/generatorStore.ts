@@ -18,6 +18,7 @@ export type GeneratorState = {
   addSlide: (type: SlideType) => void;
   removeSlide: (slideId: string) => void;
   setSlides: (slides: Slide[]) => void;
+  setExporting: (isExporting: boolean) => void;
 };
 
 export const useGeneratorStore = create<GeneratorState>((set, get) => ({
@@ -31,6 +32,8 @@ export const useGeneratorStore = create<GeneratorState>((set, get) => ({
   setActiveSlide: (slideId) => set({ activeSlideId: slideId }),
 
   setSlides: (slides) => set({ slides, activeSlideId: slides[0]?.id ?? null }),
+
+  setExporting: (isExporting) => set({ isExporting }),
 
   updateSlideLocal: (slideId, patch) => {
     set({ slides: get().slides.map((s) => (s.id === slideId ? { ...s, ...patch } : s)) });
