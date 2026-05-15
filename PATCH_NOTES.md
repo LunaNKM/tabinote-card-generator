@@ -1,42 +1,36 @@
-# Tabinote full image/export stability patch
+# Tabinote 구조 수정 패치
 
-## Fixed issues
+## 핵심 변경
 
-### 1. Preview/download mismatch
-- Removed hidden duplicate export cards from `PreviewPanel`.
-- `DownloadButton` now captures the exact same 1080x1440 card frame used inside preview.
-- This prevents preview and downloaded PNG from loading different remote images.
+1. **다운로드 전용 숨김 렌더 트리 제거**
+   - 기존: 미리보기 DOM + 숨김 export DOM 이중 구조
+   - 변경: **사용자가 보고 있는 미리보기 카드 그 자체를 캡처**
+   - 효과: 미리보기/다운로드 불일치 원인을 구조적으로 차단
 
-### 2. Repeated image issue
-- Generation keeps a project-level `usedImageSignatures` set.
-- The same image URL cannot be selected repeatedly across slides unless there are truly no alternatives.
+2. **이미지 고정(freeze) 레이어 추가**
+   - 생성 직후 원격 이미지를 `/api/image-proxy`를 통해 가져와 **data URL로 고정**
+   - 이후 미리보기와 다운로드는 모두 같은 고정 이미지 사용
+   - 효과: 재로딩/재요청/프록시 응답 차이로 다른 사진이 섞이는 문제 방지
 
-### 3. Irrelevant travel images
-- Removed topic-agnostic fallback behavior.
-- Travel image queries now focus on specific place names such as 聖水, 西村, 延南洞, 漢南, 梨泰院, 弘大, 安国, etc.
-- Route/map words are excluded from image search so maps/screenshots are less likely to appear.
+3. **안정적 다운로드 대기 로직 추가**
+   - 다운로드 전에 폰트 로딩 완료 대기
+   - 각 카드 내부 `<img>` decode/load 완료 대기
+   - 효과: 일부 카드만 다른 상태로 저장되는 레이스 컨디션 방지
 
-### 4. Mock/random image hiding real problems
-- Random `picsum.photos` fallback is disabled by default.
-- If SerpAPI fails, returns empty, or API key is missing, the card uses a clean black background instead of unrelated random images.
-- To intentionally re-enable mock images for local testing, set `ALLOW_IMAGE_MOCKS=true`.
+4. **랜덤 mock 기본 제거 유지**
+   - 새 로컬 슬라이드 추가 시에도 더 이상 랜덤 이미지가 들어가지 않음
 
-### 5. Hotlink/crawler blocked images
-- TikTok/Instagram/Facebook crawler/API image endpoints remain blocked.
-- Image rendering still goes through `/api/image-proxy` for safer html-to-image export.
+## 덮어쓸 파일
+- app/api/image-proxy/route.ts
+- lib/images/freezeSlidesForRender.ts
+- store/generatorStore.ts
+- types/slide.ts
+- components/cards/CardBackground.tsx
+- components/cards/InstagramCard.tsx
+- components/layout/PreviewPanel.tsx
+- components/generator/DownloadButton.tsx
 
-## Files included
-- `app/api/generate/route.ts`
-- `app/api/search-images/route.ts`
-- `app/api/image-proxy/route.ts`
-- `components/cards/CardBackground.tsx`
-- `components/cards/InstagramCard.tsx`
-- `components/generator/DownloadButton.tsx`
-- `components/layout/PreviewPanel.tsx`
-- `lib/images/searchImages.ts`
-- `lib/images/selectBestImage.ts`
-- `types/image.ts`
-
-## Required env
-- `SERPAPI_API_KEY` must be set in Vercel.
-- Do not set `ALLOW_IMAGE_MOCKS=true` in production unless you want random placeholder images.
+## 적용 후 기대 효과
+- 화면에서 본 카드와 다운로드 결과가 동일해야 함
+- 다운로드 시 다른 사진으로 바뀌는 현상이 구조적으로 크게 줄어듦
+- 숨김 export DOM 때문에 생기던 상태 불일치가 사라짐

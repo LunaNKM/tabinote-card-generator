@@ -4,6 +4,7 @@ import { create } from "zustand";
 import type { GenerateRequest } from "@/types/api";
 import type { Project } from "@/types/project";
 import type { Slide, SlideType } from "@/types/slide";
+import { freezeSlidesForRender } from "@/lib/images/freezeSlidesForRender";
 
 export type GeneratorState = {
   project: Project | null;
@@ -18,7 +19,6 @@ export type GeneratorState = {
   addSlide: (type: SlideType) => void;
   removeSlide: (slideId: string) => void;
   setSlides: (slides: Slide[]) => void;
-  setExporting: (isExporting: boolean) => void;
 };
 
 export const useGeneratorStore = create<GeneratorState>((set, get) => ({
@@ -32,8 +32,6 @@ export const useGeneratorStore = create<GeneratorState>((set, get) => ({
   setActiveSlide: (slideId) => set({ activeSlideId: slideId }),
 
   setSlides: (slides) => set({ slides, activeSlideId: slides[0]?.id ?? null }),
-
-  setExporting: (isExporting) => set({ isExporting }),
 
   updateSlideLocal: (slideId, patch) => {
     set({ slides: get().slides.map((s) => (s.id === slideId ? { ...s, ...patch } : s)) });
@@ -49,7 +47,8 @@ export const useGeneratorStore = create<GeneratorState>((set, get) => ({
       });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
-      set({ project: data.project, slides: data.slides, activeSlideId: data.slides[0]?.id ?? null });
+      const frozenSlides = await freezeSlidesForRender(data.slides);
+      set({ project: data.project, slides: frozenSlides, activeSlideId: frozenSlides[0]?.id ?? null });
     } catch (e) {
       set({ errorMessage: e instanceof Error ? e.message : "Generation failed" });
     } finally {
@@ -68,8 +67,9 @@ export const useGeneratorStore = create<GeneratorState>((set, get) => ({
       title: type === "cta" ? "気になる人は保存して" : "新しいカード",
       body: type === "cta" ? "次の渡韓で見返してね！" : "本文を入力してください。",
       imageMode: "single",
-      imageUrl: `https://picsum.photos/seed/${Date.now()}/1080/1440`,
-      sourceLabel: "Photo | mock",
+      imageUrl: null,
+      resolvedImageUrl: null,
+      sourceLabel: null,
       layoutSettings: {},
       createdAt: now,
       updatedAt: now

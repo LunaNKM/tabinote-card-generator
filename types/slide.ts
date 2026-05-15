@@ -32,6 +32,8 @@ export type Slide = {
   imageMode: ImageMode;
   imageUrl?: string | null;
   imageUrls?: string[] | null;
+  resolvedImageUrl?: string | null;
+  resolvedImageUrls?: string[] | null;
   imageQuery?: string | null;
   imageSourceUrl?: string | null;
   sourceLabel?: string | null;

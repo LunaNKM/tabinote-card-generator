@@ -29,7 +29,15 @@ function BackgroundImage({ url, positionX = 50, positionY = 50 }: { url?: string
 
 export function CardBackground({ slide }: { slide: Slide }) {
   const settings = getMergedPreset(slide.type, slide.layoutSettings);
-  const urls = slide.imageUrls?.length ? slide.imageUrls.filter(Boolean) : slide.imageUrl ? [slide.imageUrl] : [];
+  const urls = slide.resolvedImageUrls?.length
+    ? slide.resolvedImageUrls.filter(Boolean)
+    : slide.resolvedImageUrl
+      ? [slide.resolvedImageUrl]
+      : slide.imageUrls?.length
+        ? slide.imageUrls.filter(Boolean)
+        : slide.imageUrl
+          ? [slide.imageUrl]
+          : [];
 
   if (slide.imageMode === "collage-4" && urls.length >= 4) {
     return (
@@ -51,13 +59,13 @@ export function CardBackground({ slide }: { slide: Slide }) {
     );
   }
 
-  if (!slide.imageUrl) {
+  if (!urls[0]) {
     return <EmptyBackground />;
   }
 
   return (
     <div className="absolute inset-0">
-      <BackgroundImage url={slide.imageUrl} positionX={settings.imagePositionX} positionY={settings.imagePositionY} />
+      <BackgroundImage url={urls[0]} positionX={settings.imagePositionX} positionY={settings.imagePositionY} />
     </div>
   );
 }

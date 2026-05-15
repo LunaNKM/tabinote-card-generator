@@ -20,7 +20,12 @@ export function PreviewPanel() {
         {slides.length ? slides.map((slide) => (
           <div key={slide.id} className="flex shrink-0 flex-col items-center gap-2">
             <div className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">{String(slide.order).padStart(2, "0")} — {slide.type}</div>
-            <InstagramCard slide={slide} isActive={slide.id === activeSlideId} onClick={() => setActiveSlide(slide.id)} />
+            <InstagramCard
+              slide={slide}
+              domId={`preview-export-card-${slide.id}`}
+              isActive={slide.id === activeSlideId}
+              onClick={() => setActiveSlide(slide.id)}
+            />
           </div>
         )) : (
           <div className="flex h-full items-center justify-center text-sm text-[var(--text-muted)]">
