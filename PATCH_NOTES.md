@@ -1,36 +1,23 @@
-# Tabinote 구조 수정 패치
+# Vercel npm install 안정화 패치
 
-## 핵심 변경
+## 해결하는 문제
+Vercel 배포 중 아래 오류가 발생하는 문제를 우회합니다.
 
-1. **다운로드 전용 숨김 렌더 트리 제거**
-   - 기존: 미리보기 DOM + 숨김 export DOM 이중 구조
-   - 변경: **사용자가 보고 있는 미리보기 카드 그 자체를 캡처**
-   - 효과: 미리보기/다운로드 불일치 원인을 구조적으로 차단
+```text
+npm error Exit handler never called!
+Command "npm install" exited with 1
+```
 
-2. **이미지 고정(freeze) 레이어 추가**
-   - 생성 직후 원격 이미지를 `/api/image-proxy`를 통해 가져와 **data URL로 고정**
-   - 이후 미리보기와 다운로드는 모두 같은 고정 이미지 사용
-   - 효과: 재로딩/재요청/프록시 응답 차이로 다른 사진이 섞이는 문제 방지
+## 원인
+이전 패치 ZIP에 포함된 `package-lock.json`이 현재 실행 환경에서 생성된 lock 파일이라 Vercel의 npm 설치 과정에서 충돌할 수 있습니다. 또한 `latest` 의존성이 많아서 매 배포마다 설치 결과가 흔들릴 수 있습니다.
 
-3. **안정적 다운로드 대기 로직 추가**
-   - 다운로드 전에 폰트 로딩 완료 대기
-   - 각 카드 내부 `<img>` decode/load 완료 대기
-   - 효과: 일부 카드만 다른 상태로 저장되는 레이스 컨디션 방지
+## 수정 내용
+1. `package.json`의 모든 `latest` 제거
+2. 의존성 버전 고정
+3. `.npmrc`에서 lockfile 생성/사용을 끔
+4. `vercel.json`에서 Vercel 설치 명령을 `npm install --no-package-lock --no-audit --no-fund`로 고정
+5. Tailwind v4 PostCSS 설정 유지
 
-4. **랜덤 mock 기본 제거 유지**
-   - 새 로컬 슬라이드 추가 시에도 더 이상 랜덤 이미지가 들어가지 않음
-
-## 덮어쓸 파일
-- app/api/image-proxy/route.ts
-- lib/images/freezeSlidesForRender.ts
-- store/generatorStore.ts
-- types/slide.ts
-- components/cards/CardBackground.tsx
-- components/cards/InstagramCard.tsx
-- components/layout/PreviewPanel.tsx
-- components/generator/DownloadButton.tsx
-
-## 적용 후 기대 효과
-- 화면에서 본 카드와 다운로드 결과가 동일해야 함
-- 다운로드 시 다른 사진으로 바뀌는 현상이 구조적으로 크게 줄어듦
-- 숨김 export DOM 때문에 생기던 상태 불일치가 사라짐
+## 적용 후 해야 할 일
+GitHub 저장소에서 기존 `package-lock.json`은 삭제하는 것을 권장합니다.
+삭제하지 않아도 `vercel.json`과 `.npmrc` 때문에 무시되도록 설정했지만, 혼선을 막기 위해 삭제하는 편이 안전합니다.
