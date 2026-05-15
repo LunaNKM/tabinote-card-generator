@@ -4,41 +4,41 @@ import { autoFitText } from "@/lib/layout/autoFitText";
 
 function renderLines(text?: string | null) {
   if (!text) return null;
-  const lines = text.split("\n");
-  return lines.map((line, i) => (
-    <span key={`${line}-${i}`}>
+  return text.split("\n").map((line, i) => (
+    <span key={i}>
       {line}
-      {i < lines.length - 1 && <br />}
+      {i < text.split("\n").length - 1 && <br />}
     </span>
   ));
 }
 
-export function CardTextBlock({ slide }: { slide: Slide }) {
+export function CardTextBlock({ slide, exportMode = false }: { slide: Slide; exportMode?: boolean }) {
   const base = getMergedPreset(slide.type, slide.layoutSettings);
   const fit = autoFitText(slide);
   const settings = { ...base, ...fit, ...slide.layoutSettings };
+  const scale = exportMode ? 1 : 0.25;
 
   return (
     <div
       className="absolute z-20 text-white"
       style={{
-        left: settings.textLeft,
-        bottom: settings.textBottom,
-        width: settings.textMaxWidth
+        left: settings.textLeft * scale,
+        bottom: settings.textBottom * scale,
+        width: settings.textMaxWidth * scale
       }}
     >
       {slide.hook && (
-        <div style={{ fontSize: 30, lineHeight: 1.4, fontWeight: 700, marginBottom: 18 }}>
+        <div style={{ fontSize: 30 * scale, lineHeight: 1.4, fontWeight: 700, marginBottom: 18 * scale }}>
           {renderLines(slide.hook)}
         </div>
       )}
       <div
         style={{
-          fontSize: settings.titleSize,
+          fontSize: settings.titleSize * scale,
           lineHeight: settings.lineHeightTitle,
           fontWeight: settings.titleWeight,
           letterSpacing: "-0.035em",
-          marginBottom: 26,
+          marginBottom: 26 * scale,
           whiteSpace: "pre-wrap"
         }}
       >
@@ -47,22 +47,22 @@ export function CardTextBlock({ slide }: { slide: Slide }) {
       {slide.bullets?.length ? (
         <div
           style={{
-            fontSize: settings.bodySize,
+            fontSize: settings.bodySize * scale,
             lineHeight: settings.lineHeightBody,
             fontWeight: settings.bodyWeight,
             letterSpacing: "-0.025em",
-            marginBottom: 26
+            marginBottom: 26 * scale
           }}
         >
           {slide.bullets.map((b, i) => (
-            <div key={`${b}-${i}`}>・{b}</div>
+            <div key={i}>・{b}</div>
           ))}
         </div>
       ) : null}
       {slide.body && (
         <div
           style={{
-            fontSize: settings.bodySize,
+            fontSize: settings.bodySize * scale,
             lineHeight: settings.lineHeightBody,
             fontWeight: settings.bodyWeight,
             letterSpacing: "-0.025em",
