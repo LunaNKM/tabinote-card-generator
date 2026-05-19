@@ -49,7 +49,7 @@ cp .env.example .env.local
 
 ```text
 OPENAI_API_KEY=
-OPENAI_MODEL=gpt-5.4
+OPENAI_MODEL=gpt-5.4-mini
 ```
 
 Supabase 저장을 쓰려면:

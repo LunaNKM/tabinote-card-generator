@@ -7,7 +7,7 @@ export async function generateSlides(input: GenerateRequest): Promise<AiProject>
   if (!process.env.OPENAI_API_KEY) return mockAiProject(input);
 
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const model = process.env.OPENAI_MODEL || "gpt-5.4";
+  const model = process.env.OPENAI_MODEL || "gpt-5.4-mini";
 
   const res = await client.chat.completions.create({
     model,

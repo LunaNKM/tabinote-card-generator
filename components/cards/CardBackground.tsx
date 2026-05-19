@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import type { Slide } from "@/types/slide";
 import { getMergedPreset } from "@/lib/layout/cardPresets";
 
@@ -12,8 +15,9 @@ function EmptyBackground() {
 }
 
 function BackgroundImage({ url, positionX = 50, positionY = 50 }: { url?: string | null; positionX?: number; positionY?: number }) {
+  const [failed, setFailed] = useState(false);
   const safeSrc = toSafeImageSrc(url);
-  if (!safeSrc) return <EmptyBackground />;
+  if (!safeSrc || failed) return <EmptyBackground />;
 
   return (
     <img
@@ -23,6 +27,7 @@ function BackgroundImage({ url, positionX = 50, positionY = 50 }: { url?: string
       style={{ objectPosition: `${positionX}% ${positionY}%` }}
       draggable={false}
       crossOrigin="anonymous"
+      onError={() => setFailed(true)}
     />
   );
 }

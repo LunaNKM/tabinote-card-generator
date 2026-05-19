@@ -65,19 +65,30 @@ function ZoomModal({ slide, onClose }: { slide: Slide; onClose: () => void }) {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-[var(--text-secondary)]">출처</label>
+            <label className="mb-1 block text-xs text-[var(--text-secondary)]">사진 출처 텍스트 (카드 하단 표시)</label>
             <input
               className="app-input"
               value={slide.sourceLabel || ""}
+              placeholder="예) Photo | 올리브영"
               onChange={(e) => updateSlideLocal(slide.id, { sourceLabel: e.target.value })}
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-[var(--text-secondary)]">이미지 URL</label>
+            <label className="mb-1 block text-xs text-[var(--text-secondary)]">
+              이미지 URL
+              {!slide.imageUrl && (
+                <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">이미지 없음 — URL을 직접 입력하세요</span>
+              )}
+            </label>
             <input
-              className="app-input"
+              className={`app-input ${!slide.imageUrl ? "border-amber-400 bg-amber-50" : ""}`}
               value={slide.imageUrl || ""}
-              onChange={(e) => updateSlideLocal(slide.id, { imageUrl: e.target.value })}
+              placeholder="https://example.com/image.jpg"
+              onChange={(e) => updateSlideLocal(slide.id, {
+                imageUrl: e.target.value || null,
+                resolvedImageUrl: null,
+                resolvedImageUrls: null
+              })}
             />
           </div>
           <div className="flex gap-3">
