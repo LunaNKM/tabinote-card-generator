@@ -126,7 +126,7 @@ export function PreviewPanel() {
         <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)]">미리보기</div>
         {error && <div className="text-xs text-red-600">{error}</div>}
       </div>
-      <div className="flex flex-1 gap-5 overflow-x-auto p-8">
+      <div className="flex flex-1 flex-wrap content-start gap-5 overflow-y-auto p-8">
         {slides.length ? slides.map((slide) => (
           <div key={slide.id} className="flex shrink-0 flex-col items-center gap-2">
             <div className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">{String(slide.order).padStart(2, "0")} — {slide.type}</div>
