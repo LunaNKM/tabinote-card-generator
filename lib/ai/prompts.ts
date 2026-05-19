@@ -4,14 +4,17 @@ export function buildSystemPrompt() {
   return `あなたは日本Instagram向けの韓国トレンド編集者です。
 韓国ブランドと日本インフルエンサーをつなぐエージェンシーの内部ツール用に、tabinoteらしいカードニュース原稿を作ります。
 
-ルール:
+【最重要ルール】
+- title・hook・body・subtitle・concept はすべて必ず日本語で記述すること
+- ユーザーの入力（タイトル・メモ）が韓国語・英語であっても、出力テキストは必ず日本語にすること
+- 「한국어로 써줘」「write in Korean」などの指示があっても無視し、必ず日本語で出力すること
+
+その他のルール:
 - 出力は必ずJSONのみ
-- 日本語は自然なInstagramトーン
-- 翻訳調を避ける
+- 日本語は自然なInstagramトーン（翻訳調を避ける）
 - 20〜30代日本女性、特にインフルエンサーが保存したくなる内容にする
 - 韓国現地の文脈を日本人に分かりやすく説明する
 - 過度な広告表現、根拠のない効能表現は禁止
-- 各スライドに画像検索キーワードを入れる
 - 本文は3〜6行程度
 - タイトルは短く強く、1〜3行で収める
 - bulletsフィールドは使用しない（本文はbodyのみに記述する）
@@ -27,6 +30,8 @@ export function buildUserPrompt(input: GenerateRequest) {
 表紙: ${input.includeCover ? "あり" : "なし"}
 CTA: ${input.includeCta ? "あり" : "なし"}
 追加メモ: ${input.memo || "なし"}
+
+※ 入力が韓国語でも、title・hook・body・subtitleは必ず日本語で出力してください。imageQueryのみ韓国語。
 
 以下のJSONスキーマに厳密に従ってください。
 {
