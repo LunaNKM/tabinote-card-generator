@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useGeneratorStore } from "@/store/generatorStore";
 import { InstagramCard } from "@/components/cards/InstagramCard";
-import { EditPanel } from "@/components/editor/EditPanel";
 import type { Slide } from "@/types/slide";
 
 function ZoomModal({ slide, onClose }: { slide: Slide; onClose: () => void }) {
@@ -122,7 +121,7 @@ export function PreviewPanel() {
   }
 
   return (
-    <section className="flex h-[calc(100vh-56px)] flex-1 flex-col overflow-hidden bg-[var(--bg-page)]">
+    <section className="flex h-[calc(100vh-56px)] flex-1 flex-col bg-[var(--bg-page)]">
       <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--bg-panel)] px-7 py-4">
         <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)]">미리보기</div>
         {error && <div className="text-xs text-red-600">{error}</div>}
@@ -144,8 +143,6 @@ export function PreviewPanel() {
           </div>
         )}
       </div>
-      <EditPanel />
-
       {zoomedSlide && (
         <ZoomModal slide={zoomedSlide} onClose={() => setZoomedSlideId(null)} />
       )}
