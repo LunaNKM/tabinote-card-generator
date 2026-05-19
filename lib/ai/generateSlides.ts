@@ -32,7 +32,7 @@ function mockAiProject(input: GenerateRequest): AiProject {
       title: input.title.replace(/TOP|N選/g, "\n$&"),
       hook: "＼韓国好きなら保存しておきたい／",
       imageMode: "collage-4",
-      imageQuery: `${input.title} 韓国 トレンド`,
+      imageQuery: `${input.title} 한국 트렌드`,
       sourcePreference: "pinterest",
       layoutHint: "collage-cover"
     });
@@ -44,7 +44,7 @@ function mockAiProject(input: GenerateRequest): AiProject {
       title: ["まずチェックしたい", "話題のアイテム", "韓国っぽさ重視", "お土産にも◎", "保存推奨", "次の渡韓で"] [i] || `おすすめ ${i + 1}`,
       body: "韓国でじわじわ注目されているポイントを、\n日本の人にも分かりやすくまとめたカードです。\n気になる人は次の渡韓前にチェックしてみて。",
       imageMode: "single",
-      imageQuery: `${input.title} 韓国 ${i + 1}`,
+      imageQuery: `${input.title} 한국 ${i + 1}`,
       sourcePreference: "any",
       layoutHint: "body-heavy"
     });
@@ -56,7 +56,7 @@ function mockAiProject(input: GenerateRequest): AiProject {
       title: "気になる人は保存して",
       body: "次の渡韓で見返してね！",
       imageMode: "single",
-      imageQuery: `${input.title} 韓国`,
+      imageQuery: `${input.title} 한국`,
       sourcePreference: "pinterest",
       layoutHint: "large-title"
     });

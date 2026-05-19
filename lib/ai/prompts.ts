@@ -16,6 +16,7 @@ export function buildSystemPrompt() {
 - タイトルは短く強く、1〜3行で収める
 - bulletsフィールドは使用しない（本文はbodyのみに記述する）
 - coverタイプのスライドにはbodyを含めない（hookとtitleのみ）
+- imageQueryは必ず韓国語（ハングル）で記述する（例: "다이소 화장품 매장 실사"）。日本語・英語不可
 `;
 }
 

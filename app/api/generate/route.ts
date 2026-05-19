@@ -163,31 +163,31 @@ function buildTravelQueries(projectTitle: string, slideType: SlideType, slideTit
 
   if (slideType === "cover") {
     return Array.from(new Set([
-      uniqueJoin([projectTitle, "ソウル 街歩き カフェ 通り 路地 写真"]),
-      "ソウル 韓国 街歩き カフェ 通り 写真",
-      "Seoul Korea neighborhood street cafe photo"
+      uniqueJoin([projectTitle, "서울 카페 거리 골목 사진"]),
+      "서울 한국 카페 거리 사진",
+      "Seoul Korea street cafe neighborhood photo"
     ]));
   }
 
   if (slideType === "cta") {
     return Array.from(new Set([
-      uniqueJoin(["ソウル 韓国 街歩き カフェ 通り 写真", placeHint]),
-      "ソウル 韓国 街並み カフェ 路地 写真",
+      uniqueJoin(["서울 한국 카페 거리 사진", placeHint]),
+      "서울 한국 거리 카페 골목 사진",
       "Seoul street cafe neighborhood photo"
     ]));
   }
 
   return Array.from(new Set([
-    uniqueJoin([placeHint, "ソウル 韓国 街並み カフェ 通り 写真"]),
+    uniqueJoin([placeHint, "서울 한국 거리 카페 사진"]),
     uniqueJoin([placeHint, "Seoul neighborhood street cafe photo"]),
-    uniqueJoin([cleanTitle, "ソウル 街歩き 写真"])
+    uniqueJoin([cleanTitle, "서울 거리 사진"])
   ].filter(Boolean)));
 }
 
 function extractTravelPlace(cleanTitle: string, aiQuery: string, slideBody: string, projectTitle: string) {
   const combined = `${cleanTitle} ${aiQuery} ${slideBody} ${projectTitle}`;
   const candidates = [
-    "聖水", "西村", "延南洞", "延南", "京義線森の道", "漢南洞", "漢南", "梨泰院", "汝矣島", "弘大", "安国", "北村", "益善洞", "江南", "狎鴎亭", "新沙", "明洞", "乙支路", "景福宮"
+    "성수", "서촌", "연남동", "연남", "경의선숲길", "한남동", "한남", "이태원", "여의도", "홍대", "안국", "북촌", "익선동", "강남", "압구정", "신사", "명동", "을지로", "경복궁"
   ];
 
   const matched = candidates.filter((name) => combined.includes(name));
@@ -205,32 +205,32 @@ function getCategoryKeywords(category: GenerateInput["category"], slideType: Sli
   switch (category) {
     case "beauty":
       return {
-        primary: slideType === "cover" ? "韓国 コスメ 売り場 商品 実写" : "韓国 コスメ 商品 パッケージ 実写",
+        primary: slideType === "cover" ? "한국 화장품 매장 상품 실사" : "한국 화장품 상품 패키지 실사",
         secondary: "K-beauty product store photo",
         fallback: "beauty product photo"
       };
     case "food":
       return {
-        primary: "韓国 グルメ 料理 店舗 実写",
+        primary: "한국 음식 요리 식당 실사",
         secondary: "Korean food restaurant photo",
         fallback: "food photo"
       };
     case "fashion":
       return {
-        primary: "韓国 ファッション ブランド 店舗 実写",
+        primary: "한국 패션 브랜드 매장 실사",
         secondary: "Korean fashion store street photo",
         fallback: "fashion photo"
       };
     case "lifestyle":
       return {
-        primary: "韓国 ライフスタイル 雑貨 空間 実写",
+        primary: "한국 라이프스타일 잡화 공간 실사",
         secondary: "Korean lifestyle interior photo",
         fallback: "lifestyle photo"
       };
     case "trend":
     default:
       return {
-        primary: "韓国 トレンド 実写",
+        primary: "한국 트렌드 실사",
         secondary: "Korean trend photo",
         fallback: "trend photo"
       };

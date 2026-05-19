@@ -31,24 +31,15 @@ const BLOCKED_PATTERNS = [
 ];
 
 const MAP_LIKE_PATTERNS = [
-  "地図",
-  "マップ",
-  "map",
-  "maps",
-  "路線図",
-  "地下鉄",
-  "subway",
-  "metro",
-  "route map",
-  "アクセスマップ",
-  "案内図"
+  "지도", "지하철", "노선도", "안내도", "약도",
+  "地図", "マップ", "map", "maps", "路線図", "地下鉄",
+  "subway", "metro", "route map"
 ];
 
 const STOPWORDS = new Set([
-  "韓国", "한국", "ソウル", "서울", "旅行", "여행", "散歩", "ルート", "おすすめ", "人気", "ガチ",
-  "写真", "画像", "スポット", "エリア", "観光", "place", "travel", "item", "trend", "cover", "cta",
-  "の", "で", "を", "と", "に", "へ", "から", "まで", "route", "best", "top", "guide", "real",
-  "選", "定番", "今", "っぽい", "空気", "歩きたい", "人", "向け"
+  "한국", "韓国", "서울", "ソウル", "여행", "旅行", "추천", "인기",
+  "사진", "이미지", "스팟", "관광", "place", "travel", "item", "trend", "cover", "cta",
+  "의", "에서", "을", "와", "에", "으로", "부터", "까지", "route", "best", "top", "guide", "real"
 ]);
 
 export async function searchImages(params: {
@@ -68,8 +59,8 @@ export async function searchImages(params: {
   url.searchParams.set("engine", "google_images");
   url.searchParams.set("q", buildQuery(params.query, params.sourcePreference));
   url.searchParams.set("api_key", apiKey);
-  url.searchParams.set("hl", "ja");
-  url.searchParams.set("gl", "jp");
+  url.searchParams.set("hl", "ko");
+  url.searchParams.set("gl", "kr");
   url.searchParams.set("safe", "active");
 
   const res = await fetch(url, { cache: "no-store" });
@@ -126,7 +117,7 @@ export function isUsableImageResult(item: ImageSearchResult, query = "") {
   }
 
   // Route/travel content frequently returns maps. We want actual Instagram-card background photos.
-  const isTravelQuery = /(ソウル|서울|seoul|韓国|한국|korea|散歩|街歩き|カフェ|通り|路地|聖水|西村|延南|漢南|梨泰院|汝矣島|弘大|安国|北村|江南)/i.test(query);
+  const isTravelQuery = /(서울|ソウル|seoul|한국|韓国|korea|카페|거리|골목|성수|서촌|연남|한남|이태원|여의도|홍대|강남)/i.test(query);
   if (isTravelQuery && MAP_LIKE_PATTERNS.some((pattern) => combined.includes(pattern))) return false;
 
   return true;
@@ -227,15 +218,13 @@ function buildQuery(query: string, preference?: SourcePreference) {
     "-site:tiktokcdn.com",
     "-site:facebook.com/photo",
     "-site:picsum.photos",
-    "-地図",
-    "-マップ",
-    "-map",
-    "-路線図",
-    "-地下鉄"
+    "-지도",
+    "-지하철",
+    "-map"
   ].join(" ");
 
   if (preference === "official") {
-    return `${trimmed} 公式 official brand site ${exclusions}`;
+    return `${trimmed} 공식 브랜드 사이트 ${exclusions}`;
   }
 
   if (preference === "retail") {
@@ -246,7 +235,7 @@ function buildQuery(query: string, preference?: SourcePreference) {
     return `${trimmed} site:pinterest.com ${exclusions}`;
   }
 
-  return `${trimmed} 実写 写真 ${exclusions}`;
+  return `${trimmed} 실제 사진 ${exclusions}`;
 }
 
 function maybeMockResults(query: string, limit: number, reason: string): ImageSearchResult[] {
